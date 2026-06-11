@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bingo Tracker V2</title>
+<style>
+body{margin:0;padding:10px;background:#121212;color:#fff;font-family:Arial,sans-serif}
+.panel{background:#1e1e1e;border-radius:12px;padding:12px;margin-bottom:10px}
+#lastBall{font-size:42px;text-align:center;font-weight:bold}
+.row{display:flex;gap:6px}
+button{background:#2d6cdf;color:#fff;border:none;border-radius:8px;padding:12px;font-size:18px}
+.letter{flex:1}
+.selected{outline:3px solid #fff}
+#numberGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.board{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.head{text-align:center;font-size:26px;font-weight:bold}
+.ball{background:#333;padding:8px 2px;border-radius:6px;text-align:center;cursor:pointer}
+.called{background:#2e7d32}
+.last{background:#fbc02d;color:#000;font-weight:bold}
+.verify{background:#1976d2 !important}
+.history{max-height:220px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="panel"><div id="lastBall">--</div></div>
+
+<div class="panel">
+<div>Selection: <span id="selection"></span></div><br>
+<div class="row" id="letters"></div><br>
+<div id="numberGrid"></div><br>
+<button style="width:100%" id="callBtn">CALL</button>
+</div>
+
+<div class="panel">
+<div class="row">
+<button id="allBtn">All Balls</button>
+<button id="calledBtn">Called Only</button>
+<button id="verifyBtn">Verify</button>
+<button id="undoBtn">Undo</button>
+<button id="resetBtn">Reset</button>
+</div>
+</div>
+
+<div class="panel"><div id="board"></div></div>
+<div class="panel"><h3>History</h3><div id="history" class="history"></div></div>
+
+<script>
+let calledBalls=JSON.parse(localStorage.getItem('calledBalls')||'[]');
+let selectedLetter='B';
+let selectedNumber=1;
+let showCalledOnly=false;
+let verifyMode=false;
+let verifySelections=[];
+
+const starts={B:1,I:16,N:31,G:46,O:61};
+
+function save(){localStorage.setItem('calledBalls',JSON.stringify(calledBalls));}
+function ballName(l,n){return l+n;}
+function updateSelection(){document.getElementById('selection').textContent=ballName(selectedLetter,selectedNumber);}
+
+function renderLetters(){
+ const c=document.getElementById('letters'); c.innerHTML='';
+ ['B','I','N','G','O'].forEach(l=>{
+  const b=document.createElement('button');
+  b.className='letter'+(l===selectedLetter?' selected':'');
+  b.textContent=l;
+  b.onclick=()=>{selectedLetter=l;selectedNumber=starts[l];renderLetters();renderNumbers();updateSelection();};
+  c.appendChild(b);
+ });
+}
+
+function renderNumbers(){
+ const g=document.getElementById('numberGrid'); g.innerHTML='';
+ for(let n=starts[selectedLetter]; n<starts[selectedLetter]+15; n++){
+  const b=document.createElement('button');
+  b.textContent=n;
+  if(n===selectedNumber)b.classList.add('selected');
+  b.onclick=()=>{selectedNumber=n;renderNumbers();updateSelection();};
+  g.appendChild(b);
+ }
+}
+
+function renderBoard(){
+ const c=document.getElementById('board');
+ if(showCalledOnly){
+  c.innerHTML=['B','I','N','G','O'].map(l=>'<p><b>'+l+':</b> '+calledBalls.filter(x=>x.startsWith(l)).join(', ')+'</p>').join('');
+  return;
+ }
+ c.innerHTML='';
+ const b=document.createElement('div'); b.className='board';
+ ['B','I','N','G','O'].forEach(l=>{
+   const h=document.createElement('div'); h.className='head'; h.textContent=l; b.appendChild(h);
+ });
+ for(let r=0;r<15;r++){
+  ['B','I','N','G','O'].forEach(l=>{
+   const num=starts[l]+r, ball=ballName(l,num);
+   const d=document.createElement('div');
+   d.className='ball';
+   if(calledBalls.includes(ball)) d.classList.add('called');
+   if(calledBalls.at(-1)===ball){d.classList.remove('called'); d.classList.add('last');}
+   if(verifySelections.includes(ball)) d.classList.add('verify');
+   d.textContent=ball;
+
+   d.onclick=()=>{
+    if(verifyMode){
+      if(!calledBalls.includes(ball)) return;
+      if(verifySelections.includes(ball)){
+        verifySelections=verifySelections.filter(x=>x!==ball);
+      }else{
+        if(verifySelections.length>=5) return;
+        verifySelections.push(ball);
+        if(verifySelections.length===5){
+          alert('✅ VALID BINGO');
+          verifyMode=false;
+          verifySelections=[];
+        }
+      }
+      renderBoard();
+      return;
+    }
+
+    if(!calledBalls.includes(ball)){
+      calledBalls.push(ball);
+    }else{
+      calledBalls=calledBalls.filter(x=>x!==ball);
+    }
+    refresh();
+   };
+   b.appendChild(d);
+  });
+ }
+ c.appendChild(b);
+}
+
+function renderHistory(){
+ const h=document.getElementById('history');
+ h.innerHTML=[...calledBalls].reverse().map(x=>'<div>'+x+'</div>').join('');
+}
+function refresh(){
+ document.getElementById('lastBall').textContent=calledBalls.at(-1)||'--';
+ renderBoard(); renderHistory(); save();
+}
+
+document.getElementById('callBtn').onclick=()=>{
+ const ball=ballName(selectedLetter,selectedNumber);
+ if(calledBalls.includes(ball)){alert('Already called');return;}
+ calledBalls.push(ball); refresh();
+};
+
+document.getElementById('undoBtn').onclick=()=>{calledBalls.pop(); refresh();};
+document.getElementById('resetBtn').onclick=()=>{
+ if(prompt('Type R to clear game')==='R'){calledBalls=[];verifySelections=[];refresh();}
+};
+document.getElementById('verifyBtn').onclick=()=>{
+ verifyMode=!verifyMode; verifySelections=[];
+ if(verifyMode) alert('Tap 5 called balls');
+ renderBoard();
+};
+document.getElementById('allBtn').onclick=()=>{showCalledOnly=false;renderBoard();};
+document.getElementById('calledBtn').onclick=()=>{showCalledOnly=true;renderBoard();};
+
+renderLetters(); renderNumbers(); updateSelection(); refresh();
+</script>
+</body>
+</html>
